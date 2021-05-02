@@ -242,28 +242,27 @@ module IDL
       @scan_comment = false # true if parsing commented annotation
       @in_annotation = false # true if parsing annotation
     end
-    def find_include(fname, all = true)
-      if File.file?(fname) && File.readable?(fname)
-        File.expand_path(fname)
-      else
-        # search transient include paths if allowed (quoted includes)
-        fp = if all then
-               @xincludepaths.find do |p|
-                 check_include(p, fname)
-               end
-             else
-               nil
-             end
-        # search system include paths if still needed
-        fp = @includepaths.find do |p|
+    def find_include(fname, quoted = true)
+      fp = nil
+      if quoted
+        # first lookup in directory of current file if relative
+        # (or in current directory if input is string or io)
+        p = File.dirname(position.name)
+        fp = p if check_include(p, fname)
+        # search transient include paths if not found
+        fp ||= @xincludepaths.find do |p|
           check_include(p, fname)
-        end unless fp
-        fp += fname if fp
-        fp
+        end
       end
+      # search system include paths if still needed
+      fp ||= @includepaths.find do |p|
+        check_include(p, fname)
+      end
+      fp = File.join(fp, fname) if fp
+      fp
     end
     def check_include(path, fname)
-      fp = path + fname
+      fp = File.join(path, fname)
       File.file?(fp) && File.readable?(fp)
     end
 
@@ -271,11 +270,11 @@ module IDL
       @in.position
     end
 
-    def enter_include(src, all = true)
+    def enter_include(src, quoted = true)
       if @directiver.is_included?(src)
         @directiver.declare_include(src)
       else
-        fpath = find_include(src, all)
+        fpath = find_include(src, quoted)
         if fpath.nil?
           parse_error "Cannot open include file '#{src}'"
         end
